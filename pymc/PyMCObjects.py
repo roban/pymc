@@ -17,6 +17,18 @@ import calc_utils
 
 import datatypes
 
+try:
+    from pycuda.gpuarray import GPUArray as pycuda_array
+    import_pycuda = True
+except:
+    import_pycuda = False
+
+try:
+    from pyopencl.array import Array as pyopencl_array
+    import_pyopencl = True
+except:
+    import_pyopencl = False
+
 d_neg_inf = float(-1.7976931348623157e+308)
 
 # from PyrexLazyFunction import LazyFunction
@@ -667,7 +679,11 @@ class Stochastic(StochasticBase):
 
         # Initialize value, either from value provided or from random function.
         try:
-            if dtype.kind != 'O' and value is not None:
+            if (import_pycuda and type(value) is pycuda_array) or \
+               (import_pyopencl and type(value) is pyopencl_array):
+                # Special case for GPUArrays as they can't be passed to asanyarray.
+                self._value = value
+            elif dtype.kind != 'O' and value is not None:
                 self._value = asanyarray(value, dtype=dtype)
                 self._value.flags['W']=False
             else:
@@ -821,7 +837,7 @@ class Stochastic(StochasticBase):
             raise TypeError, self.__name__ + ': computed log-probability ' + str(logp) + ' cannot be cast to float'
 
         if logp != logp:
-            raise ValueError, self.__name__ + ': computed log-probability is NaN'
+            raise ValueError("%s: computed log-probability is NaN\n Value: %s\nParents' values:%s"%(self.__name__, self._value, self._parents.value))
 
         if self.verbose > 0:
             print '\t' + self.__name__ + ': Returning log-probability ', logp
